@@ -290,23 +290,14 @@ class FeatureEncoder(_BaseEncoder["ArrayN[numpy.float32]"]):
         self,
         x: ArrayNx3[numpy.floating],
     ) -> ArrayN[numpy.int64]:
-        # compute indices of non-masked residues
-        indices = numpy.arange(x.shape[0])
-        masked_indices = indices[~x.mask[:, 0]]
-        # only take coordinates of non-masked residues
-        masked_x = x.compressed().reshape(-1, 3)
         # compute pairwise squared distance matrix
-        r = numpy.sum(masked_x * masked_x, axis=-1).reshape(-1, 1)
+        r = numpy.sum(x * x, axis=-1).reshape(-1, 1)
         r[0] = r[-1] = numpy.nan
-        D = r - 2 * masked_x @ masked_x.T + r.T
+        D = r - 2 * numpy.ma.dot(x, x.T) + r.T
         # avoid selecting residue itself as the best
         D[numpy.diag_indices_from(D)] = numpy.inf
         # get the closest non-masked residue
-        partners = numpy.nan_to_num(D, copy=False, nan=numpy.inf).argmin(axis=1)
-        # get indices in original spaces
-        # out = numpy.arange(x.shape[0])
-        indices[~x.mask[:, 0]] = numpy.take(masked_indices, partners)
-        return indices
+        return numpy.nan_to_num(D, copy=False, nan=numpy.inf).argmin(axis=1)
 
     def _create_descriptor_mask(
         self,
