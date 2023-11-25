@@ -4,6 +4,8 @@ import struct
 
 import numpy
 
+from .utils import relu
+
 
 class LayerType(enum.IntEnum):
     DENSE = 1
@@ -31,10 +33,6 @@ class Layer:
 
 class DenseLayer(Layer):
 
-    @staticmethod
-    def relu(X, out=None):
-        return numpy.maximum(0.0, X, out=out)
-
     def __init__(self, weights, biases=None, activation=ActivationType.RELU):
         self.activation = activation
         self.weights = numpy.asarray(weights)
@@ -49,7 +47,7 @@ class DenseLayer(Layer):
         out += self.biases
 
         if self.activation == ActivationType.RELU:
-            return self.relu(out, out=out)
+            return relu(out, out=out)
         else:
             return out
 
