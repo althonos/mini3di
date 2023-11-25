@@ -8,7 +8,10 @@ import typing
 
 import numpy
 
-from .utils import relu, ArrayNxM
+from .utils import relu
+
+if typing.TYPE_CHECKING:
+    from .utils import ArrayNxM
 
 
 class LayerType(enum.IntEnum):

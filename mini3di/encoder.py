@@ -8,11 +8,12 @@ import importlib.resources
 
 import numpy
 
-from .utils import normalize, ArrayN, ArrayNx2, ArrayNx3, ArrayNx10
+from .utils import normalize
 from ._unkerasify import KerasifyParser, Layer
 
 if typing.TYPE_CHECKING:
     from Bio.PDB import Chain
+    from .utils import ArrayN, ArrayNx2, ArrayNx3, ArrayNx10
 
 
 DISTANCE_ALPHA_BETA = 1.5336
