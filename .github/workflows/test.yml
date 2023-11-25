@@ -65,8 +65,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Build universal wheel
     needs:
-    - test-osx
-    - test-linux
+    - test
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
@@ -90,8 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     name: Build source distribution
     needs:
-    - test-osx
-    - test-linux
+    - test
     steps:
     - name: Checkout code
       uses: actions/checkout@v2
