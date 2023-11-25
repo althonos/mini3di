@@ -17,48 +17,13 @@ try:
 except ImportError:
     from importlib_resources import files as resource_files
 
+T = typing.TypeVar("T")
 if typing.TYPE_CHECKING:
     from Bio.PDB import Chain
-    from .utils import ArrayN, ArrayNx2, ArrayNx3, ArrayNx10
-
+    from .utils import ArrayN, ArrayNx2, ArrayNx3, ArrayNx10, ArrayNxM
 
 DISTANCE_ALPHA_BETA = 1.5336
 ALPHABET = numpy.array(list("ACDEFGHIKLMNPQRSTVWYX"))
-
-
-def approximate_cb_position(
-    ca: ArrayNx3[numpy.floating], 
-    n: ArrayNx3[numpy.floating], 
-    c: ArrayNx3[numpy.floating], 
-    distance: float = DISTANCE_ALPHA_BETA
-) -> ArrayNx3[numpy.floating]:
-    """Approximate the position of the Cβ from the backbone atoms."""
-    assert ca.shape == n.shape
-    assert ca.shape == c.shape
-    v1 = normalize(c - ca)
-    v2 = normalize(n - ca)
-    v3 = v1 / 3.0
-    b1 = v2 + v3
-    b2 = numpy.cross(v1, b1, axis=-1)
-    u1 = normalize(b1)
-    u2 = normalize(b2)
-    v4 = (numpy.sqrt(8) / 3.0) * ((-u1 / 2.0) - (u2 * numpy.sqrt(3) / 2.0)) - v3
-    return ca + v4 * distance
-
-
-def create_residue_mask(
-    ca: ArrayNx3[numpy.floating],
-    n: ArrayNx3[numpy.floating],
-    c: ArrayNx3[numpy.floating], 
-) -> ArrayN[numpy.bool_]:
-    assert ca.shape == n.shape
-    assert ca.shape == c.shape
-    mask = (
-        numpy.isnan(ca).max(axis=-1)
-        | numpy.isnan(n).max(axis=-1)
-        | numpy.isnan(c).max(axis=-1)
-    )
-    return ~mask
 
 
 def find_residue_partners(
@@ -76,41 +41,6 @@ def find_residue_partners(
     D[~mask, :] = D[:, ~mask] = numpy.inf
     # find closest other atom for each residue
     return numpy.nan_to_num(D, copy=False, nan=numpy.inf).argmin(axis=1)
-
-
-def calc_conformation_descriptors(
-    ca: ArrayNx3[numpy.floating], 
-    mask: ArrayN[numpy.bool_], 
-    partner_index: ArrayN[numpy.int64],
-    dtype: typing.Type[numpy.floating] = numpy.float32,
-) -> ArrayNx10[numpy.floating]:
-    # build arrays of indices to use for vectorized angles
-    n = ca.shape[0]
-    I = numpy.arange(1, ca.shape[-2] - 1)
-    J = partner_index[I]
-    # compute conformational descriptors
-    u1 = normalize(ca[..., I, :] - ca[..., I - 1, :])
-    u2 = normalize(ca[..., I + 1, :] - ca[..., I, :])
-    u3 = normalize(ca[..., J, :] - ca[..., J - 1, :])
-    u4 = normalize(ca[..., J + 1, :] - ca[..., J, :])
-    u5 = normalize(ca[..., J, :] - ca[..., I, :])
-    desc = numpy.zeros((*ca.shape[:-1], 10), dtype=dtype)
-    desc[I, 0] = numpy.sum(u1 * u2, axis=-1)
-    desc[I, 1] = numpy.sum(u3 * u4, axis=-1)
-    desc[I, 2] = numpy.sum(u1 * u5, axis=-1)
-    desc[I, 3] = numpy.sum(u3 * u5, axis=-1)
-    desc[I, 4] = numpy.sum(u1 * u4, axis=-1)
-    desc[I, 5] = numpy.sum(u2 * u3, axis=-1)
-    desc[I, 6] = numpy.sum(u1 * u3, axis=-1)
-    desc[I, 7] = numpy.linalg.norm(ca[I] - ca[J], axis=-1)
-    desc[I, 8] = numpy.clip(J - I, -4, 4)
-    desc[I, 9] = numpy.copysign(numpy.log(numpy.abs(J - I) + 1), J - I)
-    # update mask around invalid positions
-    mask[1:-1] &= (
-        mask[I - 1] & mask[I] & mask[I + 1] & mask[J - 1] & mask[J] & mask[J + 1]
-    )
-    mask[0] = mask[n - 1] = False
-    return desc
 
 
 class VAEEncoder:
@@ -219,7 +149,7 @@ class CentroidEncoder:
 
 
 
-class _BaseEncoder(abc.ABC):
+class _BaseEncoder(abc.ABC, typing.Generic[T]):
     @abc.abstractmethod
     def encode_atoms(
         self, 
@@ -227,14 +157,14 @@ class _BaseEncoder(abc.ABC):
         cb: ArrayNx3[numpy.floating], 
         n: ArrayNx3[numpy.floating], 
         c: ArrayNx3[numpy.floating],
-    ) -> ArrayN[numpy.uint8]:
+    ) -> ArrayN[T]:
         raise NotImplementedError
     
     def encode_chain(
         self, 
         chain: Chain, 
         ca_residue: bool = True,
-    ) -> ArrayN[numpy.uint8]:
+    ) -> ArrayN[T]:
         # extract residues
         if ca_residue:
             residues = [residue for residue in chain.get_residues() if "CA" in residue]
@@ -256,16 +186,81 @@ class _BaseEncoder(abc.ABC):
         return self.encode_atoms(ca, cb, n, c)
 
 
+class FeatureEncoder(_BaseEncoder[numpy.float32]):
 
-class FeatureEncoder(_BaseEncoder):
     def __init__(
         self, 
         *, 
         alpha: float = 270.0, 
         beta: float = 0.0, 
-        d: float = 2.0
+        d: float = 2.0,
+        distance_alpha_beta = DISTANCE_ALPHA_BETA,
     ) -> None:
+        self.distance_alpha_beta = distance_alpha_beta
         self.vc_calculator = VirtualCenterCalculator(alpha, beta, d)
+
+    def _approximate_cb_position(
+        self,
+        ca: ArrayNx3[numpy.floating], 
+        n: ArrayNx3[numpy.floating], 
+        c: ArrayNx3[numpy.floating], 
+    ) -> ArrayNx3[numpy.floating]:
+        """Approximate the position of the Cβ from the backbone atoms."""
+        assert ca.shape == n.shape
+        assert ca.shape == c.shape
+        v1 = normalize(c - ca)
+        v2 = normalize(n - ca)
+        v3 = v1 / 3.0
+        b1 = v2 + v3
+        b2 = numpy.cross(v1, b1, axis=-1)
+        u1 = normalize(b1)
+        u2 = normalize(b2)
+        v4 = (numpy.sqrt(8) / 3.0) * ((-u1 / 2.0) - (u2 * numpy.sqrt(3) / 2.0)) - v3
+        return ca + v4 * self.distance_alpha_beta
+
+    def _calc_conformation_descriptors(
+        self,
+        ca: ArrayNx3[numpy.floating], 
+        mask: ArrayN[numpy.bool_], 
+        partner_index: ArrayN[numpy.int64],
+        dtype: typing.Type[numpy.floating] = numpy.float32,
+    ) -> ArrayNx10[numpy.floating]:
+        # build arrays of indices to use for vectorized angles
+        n = ca.shape[0]
+        I = numpy.arange(1, ca.shape[-2] - 1)
+        J = partner_index[I]
+        # compute conformational descriptors
+        u1 = normalize(ca[..., I, :] - ca[..., I - 1, :])
+        u2 = normalize(ca[..., I + 1, :] - ca[..., I, :])
+        u3 = normalize(ca[..., J, :] - ca[..., J - 1, :])
+        u4 = normalize(ca[..., J + 1, :] - ca[..., J, :])
+        u5 = normalize(ca[..., J, :] - ca[..., I, :])
+        desc = numpy.zeros((*ca.shape[:-1], 10), dtype=dtype)
+        desc[I, 0] = numpy.sum(u1 * u2, axis=-1)
+        desc[I, 1] = numpy.sum(u3 * u4, axis=-1)
+        desc[I, 2] = numpy.sum(u1 * u5, axis=-1)
+        desc[I, 3] = numpy.sum(u3 * u5, axis=-1)
+        desc[I, 4] = numpy.sum(u1 * u4, axis=-1)
+        desc[I, 5] = numpy.sum(u2 * u3, axis=-1)
+        desc[I, 6] = numpy.sum(u1 * u3, axis=-1)
+        desc[I, 7] = numpy.linalg.norm(ca[I] - ca[J], axis=-1)
+        desc[I, 8] = numpy.clip(J - I, -4, 4)
+        desc[I, 9] = numpy.copysign(numpy.log(numpy.abs(J - I) + 1), J - I)
+        # update mask around invalid positions
+        mask[1:-1] &= (
+            mask[I - 1] & mask[I] & mask[I + 1] & mask[J - 1] & mask[J] & mask[J + 1]
+        )
+        mask[0] = mask[n - 1] = False
+        return desc
+
+    def _create_nan_mask(
+        self,
+        *arrays: ArrayNxM[numpy.floating],
+    ) -> ArrayN[numpy.bool_]:
+        maximum = functools.partial(numpy.max, axis=-1)
+        return ~functools.reduce( # type: ignore
+            numpy.bitwise_or, map(maximum, map( numpy.isnan, arrays))
+        )  
 
     def encode_atoms(
         self, 
@@ -286,25 +281,26 @@ class FeatureEncoder(_BaseEncoder):
         # fix CB positions if needed
         nan_indices = numpy.isnan(cb)
         if numpy.any(nan_indices):
-            cb_approx = approximate_cb_position(ca, n, c)
-            cb[nan_indices] = cb_approx[nan_indices]
-
+            cb_approx = self._approximate_cb_position(ca, n, c)
+            # avoid writing to CB directly since it should be callee-save
+            cb_approx[~nan_indices] = cb[~nan_indices]
+            cb = cb_approx
         # compute virtual center
         vc = self.vc_calculator(ca, cb, n)
         # mask residues without coordinates
-        mask = create_residue_mask(ca, n, c)
+        mask = self._create_nan_mask(ca, n, c)
         # find closest neighbor for each residue
         partner_index = find_residue_partners(vc, mask)
         # build position features from residue angles
-        descriptors = calc_conformation_descriptors(ca, mask, partner_index)
-        return numpy.ma.masked_array(
+        descriptors = self._calc_conformation_descriptors(ca, mask, partner_index)
+        return numpy.ma.masked_array(  # type: ignore
             descriptors, 
             mask=mask.repeat(descriptors.shape[1]).reshape(descriptors.shape), 
             fill_value=numpy.nan,
-        )
+        )  
 
 
-class Encoder(_BaseEncoder):
+class Encoder(_BaseEncoder[numpy.uint8]):
     def __init__(
         self, 
         *, 
