@@ -280,6 +280,6 @@ class Encoder:
         embeddings = self.feature_encoder(descriptors)
         return self.centroid_encoder(embeddings, mask)
 
+    def build_sequence(self, states: ArrayN[numpy.uint8]) -> str:
+        return "".join( ALPHABET[states] )
 
-if __name__ == "__main__":
-    pass
