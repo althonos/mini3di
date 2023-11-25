@@ -76,8 +76,15 @@ class VirtualCenterEncoder(_BaseEncoder["ArrayNx3[numpy.float32]"]):
         d: float = 2.0,
         distance_alpha_beta = DISTANCE_ALPHA_BETA,
     ) -> None:
+        
         self._alpha = numpy.deg2rad(alpha)
         self._beta = numpy.deg2rad(beta)
+        
+        self._cos_alpha = numpy.cos(self._alpha)
+        self._sin_alpha = numpy.sin(self._alpha)
+        self._cos_beta = numpy.cos(self._beta)
+        self._sin_beta = numpy.sin(self._beta)
+
         self._d = d
         self.distance_alpha_beta = distance_alpha_beta
     
@@ -93,20 +100,23 @@ class VirtualCenterEncoder(_BaseEncoder["ArrayNx3[numpy.float32]"]):
         a = cb - ca
         b = n - ca
         # normal angle
-        k = normalize(numpy.cross(a, b, axis=-1))
+        k = normalize(numpy.cross(a, b, axis=-1), inplace=True)
         v = (
-            v * numpy.cos(self._alpha)
-            + numpy.cross(k, v) * numpy.sin(self._alpha)
-            + k * (k * v).sum(axis=-1).reshape(-1, 1) * (1 - numpy.cos(self._alpha))
+            v * self._cos_alpha
+            + numpy.cross(k, v) * self._sin_alpha
+            + k * (k * v).sum(axis=-1).reshape(-1, 1) * (1 - self._cos_alpha)
         )
         # dihedral angle
-        k = normalize(n - ca)
+        k = normalize(n - ca, inplace=True)
         v = (
-            v * numpy.cos(self._beta)
-            + numpy.cross(k, v) * numpy.sin(self._beta)
-            + k * (k * v).sum(axis=-1).reshape(-1, 1) * (1 - numpy.cos(self._beta))
+            v * self._cos_beta
+            + numpy.cross(k, v) * self._sin_beta
+            + k * (k * v).sum(axis=-1).reshape(-1, 1) * (1 - self._cos_beta)
         )
-        return ca + v * self._d
+        # apply final vector to Cα
+        v *= self._d
+        v += ca
+        return v
 
     def _approximate_cb_position(
         self,
@@ -117,15 +127,19 @@ class VirtualCenterEncoder(_BaseEncoder["ArrayNx3[numpy.float32]"]):
         """Approximate the position of the Cβ from the backbone atoms."""
         assert ca.shape == n.shape
         assert ca.shape == c.shape
-        v1 = normalize(c - ca)
-        v2 = normalize(n - ca)
+        v1 = normalize(c - ca, inplace=True)
+        v2 = normalize(n - ca, inplace=True)
         v3 = v1 / 3.0
-        b1 = v2 + v3
+        
+        b1 = numpy.add(v2, v3, out=v2)
         b2 = numpy.cross(v1, b1, axis=-1)
-        u1 = normalize(b1)
-        u2 = normalize(b2)
-        v4 = (numpy.sqrt(8) / 3.0) * ((-u1 / 2.0) - (u2 * numpy.sqrt(3) / 2.0)) - v3
-        return ca + v4 * self.distance_alpha_beta
+        u1 = normalize(b1, inplace=True)
+        u2 = normalize(b2, inplace=True)
+        
+        out = (numpy.sqrt(8) / 3.0) * ((-u1 / 2.0) - (u2 * numpy.sqrt(3) / 2.0)) - v3
+        out *= self.distance_alpha_beta
+        out += ca
+        return out
 
     def _create_nan_mask(
         self,
@@ -189,11 +203,11 @@ class FeatureEncoder(_BaseEncoder["ArrayN[numpy.float32]"]):
         I = numpy.arange(1, ca.shape[-2] - 1)
         J = partner_index[I]
         # compute conformational descriptors
-        u1 = normalize(ca[..., I, :] - ca[..., I - 1, :])
-        u2 = normalize(ca[..., I + 1, :] - ca[..., I, :])
-        u3 = normalize(ca[..., J, :] - ca[..., J - 1, :])
-        u4 = normalize(ca[..., J + 1, :] - ca[..., J, :])
-        u5 = normalize(ca[..., J, :] - ca[..., I, :])
+        u1 = normalize(ca[..., I, :] - ca[..., I - 1, :], inplace=True)
+        u2 = normalize(ca[..., I + 1, :] - ca[..., I, :], inplace=True)
+        u3 = normalize(ca[..., J, :] - ca[..., J - 1, :], inplace=True)
+        u4 = normalize(ca[..., J + 1, :] - ca[..., J, :], inplace=True)
+        u5 = normalize(ca[..., J, :] - ca[..., I, :], inplace=True)
         desc = numpy.zeros((ca.shape[0], 10), dtype=dtype)
         desc[I, 0] = numpy.sum(u1 * u2, axis=-1)
         desc[I, 1] = numpy.sum(u3 * u4, axis=-1)
