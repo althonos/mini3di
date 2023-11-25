@@ -5,6 +5,6 @@ __all__ = ["Encoder", "FeatureEncoder"]
 __version__ = "0.1.0"
 __author__ = "Martin Larralde <martin.larralde@embl.de>"
 __license__ = "GPLv3"
-__credits__ = "Martin Steinegger and his lab for ``foldseek``"
+__credits__ = "Martin Steinegger and his lab for ``foldseek``."
 
 from .encoder import Encoder, FeatureEncoder
