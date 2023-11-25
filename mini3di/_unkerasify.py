@@ -32,7 +32,6 @@ class Layer:
 
 
 class DenseLayer(Layer):
-
     def __init__(self, weights, biases=None, activation=ActivationType.RELU):
         self.activation = activation
         self.weights = numpy.asarray(weights)
@@ -40,7 +39,7 @@ class DenseLayer(Layer):
             self.biases = numpy.zeros(self.weights.shape[1])
         else:
             self.biases = numpy.asarray(biases)
-            
+
     def __call__(self, X):
         _X = numpy.asarray(X)
         out = _X @ self.weights
@@ -53,11 +52,10 @@ class DenseLayer(Layer):
 
 
 class KerasifyParser:
-    
     def __init__(self, file):
         self.file = file
         self.buffer = bytearray(1024)
-        self.n_layers, = self._get('I')
+        (self.n_layers,) = self._get("I")
 
     def __iter__(self):
         return self
@@ -71,7 +69,9 @@ class KerasifyParser:
     def _read(self, format):
         n = struct.calcsize(format)
         if len(self.buffer) < n:
-            self.buffer.extend(itertools.islice(itertools.repeat(0), n - len(self.buffer)))
+            self.buffer.extend(
+                itertools.islice(itertools.repeat(0), n - len(self.buffer))
+            )
         v = memoryview(self.buffer)[:n]
         self.file.readinto(v)
         return v
@@ -85,16 +85,18 @@ class KerasifyParser:
             return None
 
         self.n_layers -= 1
-        layer_type = LayerType(self._get('I')[0])
+        layer_type = LayerType(self._get("I")[0])
         if layer_type == LayerType.DENSE:
-            w0, = self._get('I')
-            w1, = self._get('I')
-            b0, = self._get('I')
-            weights = numpy.frombuffer(self._read(f"={w0*w1}f"), dtype='f4').reshape(w0, w1).copy()
-            biases = numpy.frombuffer(self._read(f"={b0}f"), dtype='f4').copy()
-            activation = ActivationType(self._get('I')[0])
+            (w0,) = self._get("I")
+            (w1,) = self._get("I")
+            (b0,) = self._get("I")
+            weights = (
+                numpy.frombuffer(self._read(f"={w0*w1}f"), dtype="f4")
+                .reshape(w0, w1)
+                .copy()
+            )
+            biases = numpy.frombuffer(self._read(f"={b0}f"), dtype="f4").copy()
+            activation = ActivationType(self._get("I")[0])
             return DenseLayer(weights, biases, activation)
         else:
             raise NotImplementedError(f"Unsupported layer type: {layer_type!r}")
-
-

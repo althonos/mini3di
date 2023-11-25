@@ -8,4 +8,3 @@ __license__ = "GPLv3"
 __credits__ = "Martin Steinegger and his lab for ``foldseek``"
 
 from .encoder import Encoder
-
