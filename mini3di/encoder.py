@@ -4,6 +4,7 @@ import enum
 import functools
 import struct
 import typing
+import importlib.resources
 
 import numpy
 
@@ -108,7 +109,8 @@ def calc_conformation_descriptors(
 class FeatureEncoder:
     @classmethod
     def load(cls):
-        with open("foldseek/data/encoder_weights_3di.kerasify", "rb") as f:
+        path = importlib.resources.files(__package__).joinpath("encoder_weights_3di.kerasify")
+        with path.open("rb") as f:
             parser = KerasifyParser(f)
             layers = list(parser)
         return cls(layers)
