@@ -1,0 +1,8 @@
+# build dependencies
+setuptools >=46.4
+
+# coverage dependencies
+coverage
+
+# deployment dependencies
+build
