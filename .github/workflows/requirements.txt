@@ -1,7 +1,8 @@
 # build dependencies
 setuptools >=46.4
 
-# coverage dependencies
+# test/coverage dependencies
+importlib-resources >=1.3  ; python_version < '3.9'
 coverage
 
 # deployment dependencies

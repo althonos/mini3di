@@ -22,7 +22,6 @@ def normalize(x: numpy.ndarray[numpy.number], *, inplace=False):
 
 def relu(
     x,
-    /,
     out=None,
     *,
     where=True,

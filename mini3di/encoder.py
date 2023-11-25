@@ -4,12 +4,16 @@ import enum
 import functools
 import struct
 import typing
-import importlib.resources
 
 import numpy
 
 from .utils import normalize
 from ._unkerasify import KerasifyParser, Layer
+
+try:
+    from importlib.resources import files as resource_files
+except ImportError:
+    from importlib_resources import files as resource_files
 
 if typing.TYPE_CHECKING:
     from Bio.PDB import Chain
@@ -109,8 +113,8 @@ def calc_conformation_descriptors(
 
 class FeatureEncoder:
     @classmethod
-    def load(cls):
-        path = importlib.resources.files(__package__).joinpath("encoder_weights_3di.kerasify")
+    def load(cls) -> FeatureEncoder:
+        path = resource_files(__package__).joinpath("encoder_weights_3di.kerasify")
         with path.open("rb") as f:
             parser = KerasifyParser(f)
             layers = list(parser)

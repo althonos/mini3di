@@ -1,8 +1,12 @@
 import unittest
-import importlib.resources
 
 import Bio.PDB
 from mini3di import Encoder
+
+try:
+    from importlib.resources import files as resource_files
+except ImportError:
+    from importlib_resources import files as resource_files
 
 
 class TestEncoder(unittest.TestCase):
@@ -13,7 +17,7 @@ class TestEncoder(unittest.TestCase):
 
     @classmethod
     def get_structure(cls, name):
-        path = importlib.resources.files(__package__).joinpath("data", name).with_suffix(".pdb")
+        path = resource_files(__package__).joinpath("data", name).with_suffix(".pdb")
         return cls.parser.get_structure(name, path)
 
     def test_encode_3bww(self):
