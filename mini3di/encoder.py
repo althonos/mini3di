@@ -1,18 +1,29 @@
+from __future__ import annotations
+
 import enum
 import functools
 import struct
+import typing
 
 import numpy
 
-from .utils import normalize
-from ._unkerasify import KerasifyParser
+from .utils import normalize, ArrayN, ArrayNx2, ArrayNx3, ArrayNx10
+from ._unkerasify import KerasifyParser, Layer
+
+if typing.TYPE_CHECKING:
+    from Bio.PDB import Chain
 
 
 DISTANCE_ALPHA_BETA = 1.5336
 ALPHABET = numpy.array(list("ACDEFGHIKLMNPQRSTVWYX"))
 
 
-def approximate_cb_position(ca, n, c, distance=DISTANCE_ALPHA_BETA):
+def approximate_cb_position(
+    ca: ArrayNx3[numpy.floating], 
+    n: ArrayNx3[numpy.floating], 
+    c: ArrayNx3[numpy.floating], 
+    distance: float = DISTANCE_ALPHA_BETA
+) -> ArrayNx3[numpy.floating]:
     """Approximate the position of the Cβ from the backbone atoms."""
     assert ca.shape == n.shape
     assert ca.shape == c.shape
@@ -27,7 +38,11 @@ def approximate_cb_position(ca, n, c, distance=DISTANCE_ALPHA_BETA):
     return ca + v4 * distance
 
 
-def create_residue_mask(ca, n, c):
+def create_residue_mask(
+    ca: ArrayNx3[numpy.floating],
+    n: ArrayNx3[numpy.floating],
+    c: ArrayNx3[numpy.floating], 
+) -> ArrayN[numpy.bool_]:
     assert ca.shape == n.shape
     assert ca.shape == c.shape
     mask = (
@@ -38,7 +53,10 @@ def create_residue_mask(ca, n, c):
     return ~mask
 
 
-def find_residue_partners(cb, mask):
+def find_residue_partners(
+    cb: ArrayNx3[numpy.floating], 
+    mask: ArrayN[numpy.bool_]
+) -> ArrayN[numpy.int64]:
     axes = (*range(len(cb.shape) - 2), -2, -1)
     # compute pairwise squared distance matrix
     r = numpy.sum(cb * cb, axis=-1).reshape(*cb.shape[:-1], 1)
@@ -52,7 +70,12 @@ def find_residue_partners(cb, mask):
     return numpy.nan_to_num(D, copy=False, nan=numpy.inf).argmin(axis=1)
 
 
-def calc_conformation_descriptors(ca, mask, partner_index):
+def calc_conformation_descriptors(
+    ca: ArrayNx3[numpy.floating], 
+    mask: ArrayN[numpy.bool_], 
+    partner_index: ArrayN[numpy.int64],
+    dtype: typing.Type[numpy.floating] = numpy.float32,
+) -> ArrayNx10[numpy.floating]:
     # build arrays of indices to use for vectorized angles
     n = ca.shape[0]
     I = numpy.arange(1, ca.shape[-2] - 1)
@@ -63,7 +86,7 @@ def calc_conformation_descriptors(ca, mask, partner_index):
     u3 = normalize(ca[..., J, :] - ca[..., J - 1, :])
     u4 = normalize(ca[..., J + 1, :] - ca[..., J, :])
     u5 = normalize(ca[..., J, :] - ca[..., I, :])
-    desc = numpy.zeros((*ca.shape[:-1], 10))
+    desc = numpy.zeros((*ca.shape[:-1], 10), dtype=dtype)
     desc[I, 0] = numpy.sum(u1 * u2, axis=-1)
     desc[I, 1] = numpy.sum(u3 * u4, axis=-1)
     desc[I, 2] = numpy.sum(u1 * u5, axis=-1)
@@ -90,20 +113,25 @@ class FeatureEncoder:
             layers = list(parser)
         return cls(layers)
 
-    def __init__(self, layers):
-        self.layers = layers
+    def __init__(self, layers: typing.Iterable[Layer]):
+        self.layers = list(layers)
 
-    def __call__(self, X):
+    def __call__(self, X: ArrayNx10[numpy.floating]) -> ArrayNx2[numpy.floating]:
         return functools.reduce(lambda x, f: f(x), self.layers, X)
 
 
 class VirtualCenterCalculator:
-    def __init__(self, alpha=270, beta=0, d=2):
+    def __init__(self, alpha: float = 270.0, beta: float = 0.0, d: float = 2.0):
         self._alpha = numpy.deg2rad(alpha)
         self._beta = numpy.deg2rad(beta)
         self._d = d
 
-    def __call__(self, ca, cb, n):
+    def __call__(
+        self, 
+        ca: ArrayNx3[numpy.floating], 
+        cb: ArrayNx3[numpy.floating], 
+        n: ArrayNx3[numpy.floating], 
+    ) -> ArrayNx3[numpy.floating]:
         assert ca.shape == n.shape
         assert ca.shape == cb.shape
         v = cb - ca
@@ -127,7 +155,7 @@ class VirtualCenterCalculator:
 
 
 class CentroidEncoder:
-    _CENTROIDS = numpy.array(
+    _CENTROIDS: ArrayNx2[numpy.float32] = numpy.array(
         [
             [-1.0729, -0.3600],
             [-0.1356, -1.8914],
@@ -152,38 +180,60 @@ class CentroidEncoder:
         ]
     )
 
-    def __init__(self, centroids=None, invalid_state=2):
+    @classmethod
+    def load(cls, invalid_state: int = 2):
+        return cls(cls._CENTROIDS.copy(), invalid_state=invalid_state)
+
+    def __init__(
+        self, 
+        centroids: ArrayNx2[numpy.float32], 
+        invalid_state: int = 2
+    ) -> None:
         self.invalid_state = invalid_state
-        self.centroids = (
-            self._CENTROIDS.copy() if centroids is None else numpy.asarray(centroids)
-        )
+        self.centroids = numpy.asarray(centroids)
         self.r2 = numpy.sum(self.centroids**2, 1).reshape(-1, 1).T
 
-    def __call__(self, embeddings, mask):
+    def __call__(
+        self, 
+        embeddings: ArrayNx2[numpy.floating], 
+        mask: ArrayN[numpy.bool_]
+    ) -> ArrayN[numpy.uint8]:
         # compute pairwise squared distance matrix
         r1 = numpy.sum(embeddings * embeddings, 1).reshape(-1, 1)
         D = r1 - 2 * embeddings @ self.centroids.T + self.r2
         # find closest centroid
-        states = D.argmin(axis=1)
+        states = numpy.empty(D.shape[0], dtype=numpy.uint8)
+        D.argmin(axis=1, out=states)
         # use invalid state for masked residues
         states[~mask] = self.invalid_state
         return states
 
 
 class Encoder:
-    def __init__(self, *, alpha=270, beta=0, d=2):
+    def __init__(
+        self, 
+        *, 
+        alpha: float = 270.0, 
+        beta: float = 0.0, 
+        d: float = 2.0
+    ) -> None:
         self.vc_calculator = VirtualCenterCalculator(alpha=alpha, beta=beta, d=d)
         self.feature_encoder = FeatureEncoder.load()
-        self.centroid_encoder = CentroidEncoder()
+        self.centroid_encoder = CentroidEncoder.load()
 
-    def encode_chain(self, chain, ca_residue=True):
+    def encode_chain(
+        self, 
+        chain: Chain, 
+        ca_residue: bool = True,
+    ) -> ArrayN[numpy.uint8]:
         # extract residues
         if ca_residue:
             residues = [residue for residue in chain.get_residues() if "CA" in residue]
         else:
             residues = chain.get_residues()
         # extract atom coordinates
-        ca = numpy.array(numpy.nan).repeat(3 * len(residues)).reshape(len(residues), 3)
+        r = len(residues)
+        ca = numpy.array(numpy.nan, dtype=numpy.float32).repeat(3 * r).reshape(r, 3)
         cb = ca.copy()
         n = ca.copy()
         c = ca.copy()
@@ -196,7 +246,13 @@ class Encoder:
         # encoder coordiantes
         return self.encode_atoms(ca, cb, n, c)
 
-    def encode_atoms(self, ca, cb, n, c):
+    def encode_atoms(
+        self, 
+        ca: ArrayNx3[numpy.floating], 
+        cb: ArrayNx3[numpy.floating], 
+        n: ArrayNx3[numpy.floating], 
+        c: ArrayNx3[numpy.floating],
+    ) -> ArrayN[numpy.uint8]:
         ca = numpy.asarray(ca)
         cb = numpy.asarray(cb)
         n = numpy.asarray(n)

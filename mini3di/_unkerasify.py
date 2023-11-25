@@ -1,10 +1,11 @@
+import abc
 import enum
 import itertools
 import struct
 
 import numpy
 
-from .utils import relu
+from .utils import relu, ArrayNxM
 
 
 class LayerType(enum.IntEnum):
@@ -27,8 +28,10 @@ class ActivationType(enum.IntEnum):
     HARD_SIGMOID = 6
 
 
-class Layer:
-    pass
+class Layer(abc.ABC):
+    @abc.abstractmethod
+    def __call__(self, X: ArrayNxM[numpy.floating]) -> ArrayNxM[numpy.floating]:
+        raise NotImplementedError
 
 
 class DenseLayer(Layer):
@@ -40,7 +43,7 @@ class DenseLayer(Layer):
         else:
             self.biases = numpy.asarray(biases)
 
-    def __call__(self, X):
+    def __call__(self, X: ArrayNxM[numpy.floating]) -> ArrayNxM[numpy.floating]:
         _X = numpy.asarray(X)
         out = _X @ self.weights
         out += self.biases
