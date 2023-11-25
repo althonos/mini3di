@@ -4,8 +4,8 @@ import typing
 
 import numpy
 
-
 if typing.TYPE_CHECKING:
+    from types import ModuleType
     from typing import Annotated, Literal, TypeVar
     import numpy.typing
 
@@ -16,9 +16,11 @@ if typing.TYPE_CHECKING:
     ArrayNx10 = Annotated[numpy.typing.NDArray[DType], Literal["N", 10]]
     ArrayNxM = Annotated[numpy.typing.NDArray[DType], Literal["N", "M"]]
 
+
 def normalize(x: numpy.ndarray[numpy.number], *, inplace=False):
     norm = numpy.linalg.norm(x, axis=-1).reshape(*x.shape[:-1], 1)
-    return numpy.divide(x, norm, out=x if inplace else None)
+    return numpy.divide(x, norm, out=x if inplace else None, where=norm != 0)
+
 
 def relu(
     x,

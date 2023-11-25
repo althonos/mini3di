@@ -56,8 +56,10 @@ class _BaseEncoder(abc.ABC, typing.Generic[T]):
         c = ca.copy()
         for i, residue in enumerate(residues):
             ca[i, :] = residue["CA"].coord
-            n[i, :] = residue["N"].coord
-            c[i, :] = residue["C"].coord
+            if "N" in residue:
+                n[i, :] = residue["N"].coord
+            if "C" in residue:
+                c[i, :] = residue["C"].coord
             if "CB" in residue:
                 cb[i, :] = residue["CB"].coord
         # encoder coordiantes
@@ -127,12 +129,16 @@ class VirtualCenterEncoder(_BaseEncoder["ArrayNx3[numpy.float32]"]):
 
     def _create_nan_mask(
         self,
-        *arrays: ArrayNxM[numpy.floating],
-    ) -> ArrayN[numpy.bool_]:
-        maximum = functools.partial(numpy.max, axis=-1)
-        return ~functools.reduce( # type: ignore
-            numpy.bitwise_or, map(maximum, map( numpy.isnan, arrays))
-        ) 
+        ca: ArrayNx3[numpy.floating],
+        n: ArrayNx3[numpy.floating],
+        c: ArrayNx3[numpy.floating],
+    ) -> ArrayNx3[numpy.bool_]:
+        """Mask any column which contains at least one NaN value.
+        """
+        mask_ca = numpy.isnan(ca).max(axis=1)
+        mask_n = numpy.isnan(n).max(axis=1)
+        mask_c = numpy.isnan(n).max(axis=1)
+        return (mask_ca | mask_n | mask_c).repeat(3).reshape(-1, 3)
 
     def encode_atoms(
         self, 
@@ -160,10 +166,9 @@ class VirtualCenterEncoder(_BaseEncoder["ArrayNx3[numpy.float32]"]):
         # compute virtual center
         vc = self._compute_virtual_center(ca, cb, n)
         # mask residues without coordinates
-        mask = self._create_nan_mask(ca, n, c)
         return numpy.ma.masked_array(  # type: ignore
             vc, 
-            mask=~mask.repeat(vc.shape[1]).reshape(vc.shape), 
+            mask=self._create_nan_mask(ca, n, c),
             fill_value=numpy.nan,
         )  
 
@@ -176,7 +181,6 @@ class FeatureEncoder(_BaseEncoder["ArrayN[numpy.float32]"]):
     def _calc_conformation_descriptors(
         self,
         ca: ArrayNx3[numpy.floating], 
-        mask: ArrayN[numpy.bool_], 
         partner_index: ArrayN[numpy.int64],
         dtype: typing.Type[numpy.floating] = numpy.float32,
     ) -> ArrayNx10[numpy.floating]:
@@ -190,7 +194,7 @@ class FeatureEncoder(_BaseEncoder["ArrayN[numpy.float32]"]):
         u3 = normalize(ca[..., J, :] - ca[..., J - 1, :])
         u4 = normalize(ca[..., J + 1, :] - ca[..., J, :])
         u5 = normalize(ca[..., J, :] - ca[..., I, :])
-        desc = numpy.zeros((*ca.shape[:-1], 10), dtype=dtype)
+        desc = numpy.zeros((ca.shape[0], 10), dtype=dtype)
         desc[I, 0] = numpy.sum(u1 * u2, axis=-1)
         desc[I, 1] = numpy.sum(u3 * u4, axis=-1)
         desc[I, 2] = numpy.sum(u1 * u5, axis=-1)
@@ -201,29 +205,43 @@ class FeatureEncoder(_BaseEncoder["ArrayN[numpy.float32]"]):
         desc[I, 7] = numpy.linalg.norm(ca[I] - ca[J], axis=-1)
         desc[I, 8] = numpy.clip(J - I, -4, 4)
         desc[I, 9] = numpy.copysign(numpy.log(numpy.abs(J - I) + 1), J - I)
-        # update mask around invalid positions
-        mask[1:-1] &= (
-            mask[I - 1] & mask[I] & mask[I + 1] & mask[J - 1] & mask[J] & mask[J + 1]
-        )
-        mask[0] = mask[n - 1] = False
         return desc
 
     def _find_residue_partners(
         self,
         x: ArrayNx3[numpy.floating], 
-        mask: ArrayN[numpy.bool_]
     ) -> ArrayN[numpy.int64]:
-        axes = (*range(len(x.shape) - 2), -2, -1)
+        # compute indices of non-masked residues
+        indices = numpy.arange(x.shape[0])
+        masked_indices = indices[~x.mask[:, 0]]
+        # only take coordinates of non-masked residues
+        masked_x = x.compressed().reshape(-1, 3)
         # compute pairwise squared distance matrix
-        r = numpy.sum(x * x, axis=-1).reshape(*x.shape[:-1], 1)
+        r = numpy.sum(masked_x * masked_x, axis=-1).reshape(-1, 1)
         r[0] = r[-1] = numpy.nan
-        D = r - 2 * x @ x.T + r.T
+        D = r - 2 * masked_x @ masked_x.T + r.T
         # avoid selecting residue itself as the best
         D[numpy.diag_indices_from(D)] = numpy.inf
-        # avoid selecting a masked residue as the best
-        D[~mask, :] = D[:, ~mask] = numpy.inf
-        # find closest other atom for each residue
-        return numpy.nan_to_num(D, copy=False, nan=numpy.inf).argmin(axis=1)
+        # get the closest non-masked residue
+        partners = numpy.nan_to_num(D, copy=False, nan=numpy.inf).argmin(axis=1)
+        # get indices in original spaces
+        # out = numpy.arange(x.shape[0])
+        indices[~x.mask[:, 0]] = numpy.take(masked_indices, partners)
+        return indices
+
+    def _create_descriptor_mask(
+        self,
+        mask: ArrayN[numpy.bool_],
+        partner_index: ArrayN[numpy.int64],
+    ) -> ArrayNx10[numpy.bool_]:
+        I = numpy.arange(1, mask.shape[0] - 1)
+        J = partner_index[I]
+        out = numpy.zeros((mask.shape[0], 10), dtype=numpy.bool_)
+        out[1:-1, :] |= (
+            mask[I - 1] | mask[I] | mask[I + 1] | mask[J - 1] | mask[J] | mask[J + 1]
+        ).reshape(mask.shape[0]-2, 1)
+        out[0] = out[-1] = True
+        return out
 
     def encode_atoms(
         self, 
@@ -232,15 +250,17 @@ class FeatureEncoder(_BaseEncoder["ArrayN[numpy.float32]"]):
         n: ArrayNx3[numpy.floating], 
         c: ArrayNx3[numpy.floating],
     ) -> ArrayN[numpy.uint8]:
+        # compute the virtual center form the backbone atoms
         vc = self.vc_encoder.encode_atoms(ca, cb, n, c)
-        mask = ~vc.mask[:, 0]
         # find closest neighbor for each residue
-        partner_index = self._find_residue_partners(vc.data, mask)
+        partner_index = self._find_residue_partners(vc)
         # build position features from residue angles
-        descriptors = self._calc_conformation_descriptors(ca, mask, partner_index)
+        descriptors = self._calc_conformation_descriptors(ca, partner_index)
+        # create mask
+        mask = self._create_descriptor_mask(vc.mask[:, 0], partner_index)
         return numpy.ma.masked_array(  # type: ignore
             descriptors, 
-            mask=~mask.repeat(descriptors.shape[1]).reshape(descriptors.shape), 
+            mask=mask,
             fill_value=numpy.nan,
         )  
 
@@ -289,7 +309,6 @@ class Encoder(_BaseEncoder["ArrayN[numpy.uint8]"]):
     ) -> ArrayN[numpy.uint8]:
         descriptors = self.feature_encoder.encode_atoms(ca, cb, n, c)
         states = self.vae_encoder(descriptors.data)
-        states[descriptors.mask[:, 0]] = self._INVALID_STATE
         return numpy.ma.masked_array(
             states, 
             mask=descriptors.mask[:, 0], 
@@ -297,5 +316,5 @@ class Encoder(_BaseEncoder["ArrayN[numpy.uint8]"]):
         )
 
     def build_sequence(self, states: ArrayN[numpy.uint8]) -> str:
-        return "".join( ALPHABET[states] )
+        return "".join( ALPHABET[states.filled()] )
 

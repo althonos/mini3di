@@ -17,7 +17,7 @@ class TestEncoder(unittest.TestCase):
 
     @classmethod
     def get_structure(cls, name):
-        path = resource_files(__package__).joinpath("data", name).with_suffix(".pdb")
+        path = resource_files(__package__).joinpath("data", f"{name}.pdb")
         return cls.parser.get_structure(name, path)
 
     def test_encode_3bww(self):
@@ -29,6 +29,18 @@ class TestEncoder(unittest.TestCase):
             "DKDFFEAAEDDLVCLVVLLPPPACPQRQAYEDALVVQVPDDPVSVVSVVNSLVHHAYAYEYEAQQL"
             "LDDPQGDVVSLVSVLVCCVVSVPQEYEYENDPPDADALDVVSLVSSLVSQLVSCVSSVGAYAYEDA"
             "ADQDHDPRHPDDVLVSRQSNCVSNVHAHAYELVRLVRCCVRPVPDDSLVSLVRHPLQRHQHYEYQV"
+            "VSVVSVLVNLVDHQAHHYYYHDYPDDVVVNSVVRVVSRVSNVVSCVVVVHYIDMD",
+        )
+
+    def test_encode_3bww_masked(self):
+        structure = self.get_structure("3bww.masked")
+        states = self.encoder.encode_chain(structure[0]["A"])
+        sequence = self.encoder.build_sequence(states)
+        self.assertEqual(
+            sequence,
+            "DKDFFEAAEDDLVCLVVLLPPPACPQRQAYEDALVVQVPDDPVSVVSVVNSLVHHAYAYEYEAQQL"
+            "DDDPQGDVVSLVSVLVCCVVSVPQEYEYENDPPDADALDPVDDDSSLVSQLVSCVSSVGAYAYEDA"
+            "ADQDHDPRHPDDVLVSRQVSCVSNVHAHAYELVRLVRCCVRPVPDDSLVSLVRHPLQRHQHYEYQV"
             "VSVVSVLVNLVDHQAHHYYYHDYPDDVVVNSVVRVVSRVSNVVSCVVVVHYIDMD",
         )
 
