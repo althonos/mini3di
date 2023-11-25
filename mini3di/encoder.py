@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import abc
 import enum
 import functools
 import struct
 import typing
 
 import numpy
+import numpy.ma
 
 from .utils import normalize
 from ._unkerasify import KerasifyParser, Layer
@@ -111,9 +113,9 @@ def calc_conformation_descriptors(
     return desc
 
 
-class FeatureEncoder:
+class VAEEncoder:
     @classmethod
-    def load(cls) -> FeatureEncoder:
+    def load(cls) -> VAEEncoder:
         path = resource_files(__package__).joinpath("encoder_weights_3di.kerasify")
         with path.open("rb") as f:
             parser = KerasifyParser(f)
@@ -216,18 +218,18 @@ class CentroidEncoder:
         return states
 
 
-class Encoder:
-    def __init__(
-        self, 
-        *, 
-        alpha: float = 270.0, 
-        beta: float = 0.0, 
-        d: float = 2.0
-    ) -> None:
-        self.vc_calculator = VirtualCenterCalculator(alpha=alpha, beta=beta, d=d)
-        self.feature_encoder = FeatureEncoder.load()
-        self.centroid_encoder = CentroidEncoder.load()
 
+class _BaseEncoder(abc.ABC):
+    @abc.abstractmethod
+    def encode_atoms(
+        self, 
+        ca: ArrayNx3[numpy.floating], 
+        cb: ArrayNx3[numpy.floating], 
+        n: ArrayNx3[numpy.floating], 
+        c: ArrayNx3[numpy.floating],
+    ) -> ArrayN[numpy.uint8]:
+        raise NotImplementedError
+    
     def encode_chain(
         self, 
         chain: Chain, 
@@ -252,6 +254,18 @@ class Encoder:
                 cb[i, :] = residue["CB"].coord
         # encoder coordiantes
         return self.encode_atoms(ca, cb, n, c)
+
+
+
+class FeatureEncoder(_BaseEncoder):
+    def __init__(
+        self, 
+        *, 
+        alpha: float = 270.0, 
+        beta: float = 0.0, 
+        d: float = 2.0
+    ) -> None:
+        self.vc_calculator = VirtualCenterCalculator(alpha, beta, d)
 
     def encode_atoms(
         self, 
@@ -283,9 +297,40 @@ class Encoder:
         partner_index = find_residue_partners(vc, mask)
         # build position features from residue angles
         descriptors = calc_conformation_descriptors(ca, mask, partner_index)
-        # compute embeddings and decode states
-        embeddings = self.feature_encoder(descriptors)
-        return self.centroid_encoder(embeddings, mask)
+        return numpy.ma.masked_array(
+            descriptors, 
+            mask=mask.repeat(descriptors.shape[1]).reshape(descriptors.shape), 
+            fill_value=numpy.nan,
+        )
+
+
+class Encoder(_BaseEncoder):
+    def __init__(
+        self, 
+        *, 
+        alpha: float = 270.0, 
+        beta: float = 0.0, 
+        d: float = 2.0
+    ) -> None:
+        self.feature_encoder = FeatureEncoder()
+        self.vae_encoder = VAEEncoder.load()
+        self.centroid_encoder = CentroidEncoder.load()
+
+    def encode_atoms(
+        self, 
+        ca: ArrayNx3[numpy.floating], 
+        cb: ArrayNx3[numpy.floating], 
+        n: ArrayNx3[numpy.floating], 
+        c: ArrayNx3[numpy.floating],
+    ) -> ArrayN[numpy.uint8]:
+        descriptors = self.feature_encoder.encode_atoms(ca, cb, n, c)
+        embeddings = self.vae_encoder(descriptors)
+        states = self.centroid_encoder(embeddings, descriptors.mask[:, 0])
+        return numpy.ma.masked_array(
+            states, 
+            mask=descriptors.mask[:, 0], 
+            fill_value=self.centroid_encoder.invalid_state
+        )
 
     def build_sequence(self, states: ArrayN[numpy.uint8]) -> str:
         return "".join( ALPHABET[states] )
