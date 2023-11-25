@@ -19,10 +19,11 @@
 
 ## 🗺️ Overview
 
-[`foldseek`] is a method developed by van Kempen *et al.*[\[1\]](#ref1) for the fast
-and accurate search of protein structures. In order to search proteins structures
-at a large scale, it first encodes the 3D structure into sequences over a
-structural alphabet, 3di, which captures tertiary amino acid interactions.
+[`foldseek`](https://github.com/steineggerlab/foldseek) is a method developed
+by van Kempen *et al.*[\[1\]](#ref1) for the fast and accurate search of
+protein structures. In order to search proteins structures at a large scale,
+it first encodes the 3D structure into sequences over a structural alphabet,
+3di, which captures tertiary amino acid interactions.
 
 `mini3di` is a pure-Python package to encode 3D structures of proteins into
 the 3di alphabet, using the trained weights from the `foldseek` VQ-VAE model.
@@ -113,7 +114,7 @@ for chain in struct.get_chains():
 
 ### ⚠️ Issue Tracker
 
-Found a bug ? Have an enhancement request ? Head over to the [GitHub issue
+Found a bug? Have an enhancement request? Head over to the [GitHub issue
 tracker](https://github.com/althonos/mini3di/issues) if you need to report
 or ask something. If you are filing in on a bug, please include as much
 information as you can about the issue, and try to recreate the same bug
