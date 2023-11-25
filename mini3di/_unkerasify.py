@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import abc
 import enum
+import functools
 import itertools
 import struct
 import typing
+from typing import BinaryIO, Iterable
 
 import numpy
 
@@ -58,6 +60,20 @@ class DenseLayer(Layer):
             return relu(out, out=out)
         else:
             return out
+
+
+class Model:
+
+    @classmethod
+    def load(cls, f: BinaryIO) -> Model:
+        parser = KerasifyParser(f)
+        return cls(parser)
+
+    def __init__(self, layers: Iterable[Layer] = ()):
+        self.layers = list(layers)
+    
+    def __call__(self, X: ArrayNxM[numpy.floating]) -> ArrayNxM[numpy.floating]:
+        return functools.reduce(lambda x, f: f(x), self.layers, X)
 
 
 class KerasifyParser:

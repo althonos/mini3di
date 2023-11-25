@@ -10,7 +10,7 @@ import numpy
 import numpy.ma
 
 from .utils import normalize
-from ._unkerasify import KerasifyParser, Layer
+from ._unkerasify import KerasifyParser, Layer, Model
 
 try:
     from importlib.resources import files as resource_files
@@ -41,22 +41,6 @@ def find_residue_partners(
     D[~mask, :] = D[:, ~mask] = numpy.inf
     # find closest other atom for each residue
     return numpy.nan_to_num(D, copy=False, nan=numpy.inf).argmin(axis=1)
-
-
-class VAEEncoder:
-    @classmethod
-    def load(cls) -> VAEEncoder:
-        path = resource_files(__package__).joinpath("encoder_weights_3di.kerasify")
-        with path.open("rb") as f:
-            parser = KerasifyParser(f)
-            layers = list(parser)
-        return cls(layers)
-
-    def __init__(self, layers: typing.Iterable[Layer]):
-        self.layers = list(layers)
-
-    def __call__(self, X: ArrayNx10[numpy.floating]) -> ArrayNx2[numpy.floating]:
-        return functools.reduce(lambda x, f: f(x), self.layers, X)
 
 
 class VirtualCenterCalculator:
@@ -308,8 +292,9 @@ class Encoder(_BaseEncoder[numpy.uint8]):
         beta: float = 0.0, 
         d: float = 2.0
     ) -> None:
+        with resource_files(__package__).joinpath("encoder_weights_3di.kerasify").open("rb") as f:
+            self.vae_encoder = Model.load(f)
         self.feature_encoder = FeatureEncoder()
-        self.vae_encoder = VAEEncoder.load()
         self.centroid_encoder = CentroidEncoder.load()
 
     def encode_atoms(
