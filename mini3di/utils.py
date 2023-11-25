@@ -10,7 +10,7 @@ ArrayNx3 = Annotated[numpy.typing.NDArray[DType], Literal["N", 3]]
 ArrayNx10 = Annotated[numpy.typing.NDArray[DType], Literal["N", 10]]
 ArrayNxM = Annotated[numpy.typing.NDArray[DType], Literal["N", "M"]]
 
-def normalize(x, *, inplace=False):
+def normalize(x: numpy.ndarray[numpy.number], *, inplace=False):
     norm = numpy.linalg.norm(x, axis=-1).reshape(*x.shape[:-1], 1)
     return numpy.divide(x, norm, out=x if inplace else None)
 

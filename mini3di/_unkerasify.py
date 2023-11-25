@@ -1,7 +1,10 @@
+from __future__ import annotations
+
 import abc
 import enum
 import itertools
 import struct
+import typing
 
 import numpy
 
@@ -55,35 +58,43 @@ class DenseLayer(Layer):
 
 
 class KerasifyParser:
-    def __init__(self, file):
+    """An incomplete parser for model files serialized with `kerasify`.
+
+    Note:
+        Only dense layers are supported, since the ``foldseek`` VQ-VAE model
+        is only using 3 dense layers.
+
+    """
+
+    def __init__(self, file: typing.BinaryIO) -> None:
         self.file = file
         self.buffer = bytearray(1024)
         (self.n_layers,) = self._get("I")
 
-    def __iter__(self):
+    def __iter__(self) -> KerasifyParser:
         return self
 
-    def __next__(self):
+    def __next__(self) -> Layer:
         layer = self.read()
         if layer is None:
             raise StopIteration
         return layer
 
-    def _read(self, format):
+    def _read(self, format: str) -> memoryview:
         n = struct.calcsize(format)
         if len(self.buffer) < n:
             self.buffer.extend(
                 itertools.islice(itertools.repeat(0), n - len(self.buffer))
             )
         v = memoryview(self.buffer)[:n]
-        self.file.readinto(v)
+        self.file.readinto(v)  # type: ignore
         return v
 
-    def _get(self, format):
+    def _get(self, format: str) -> typing.Tuple[typing.Any, ...]:
         v = self._read(format)
         return struct.unpack(format, v)
 
-    def read(self):
+    def read(self) -> typing.Optional[Layer]:
         if self.n_layers == 0:
             return None
 
