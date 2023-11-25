@@ -1,12 +1,11 @@
 import enum
 import functools
 import struct
-import importlib.resources
 
 import numpy
 
-from ._unkerasify import KerasifyParser
 from .utils import normalize
+from ._unkerasify import KerasifyParser
 
 
 DISTANCE_ALPHA_BETA = 1.5336
@@ -30,8 +29,6 @@ def approximate_cb_position(ca, n, c, distance=DISTANCE_ALPHA_BETA):
 
 
 def create_residue_mask(ca, n, c):
-    """Create a mask for residues missing backbone coordinates.
-    """
     assert ca.shape == n.shape
     assert ca.shape == c.shape
     mask = numpy.isnan(ca).max(axis=-1) | numpy.isnan(n).max(axis=-1) | numpy.isnan(c).max(axis=-1)
@@ -39,12 +36,9 @@ def create_residue_mask(ca, n, c):
 
 
 def find_residue_partners(cb, mask):
-    """Find the closest other residue for each residue.
-    """
-    assert cb.shape[0] == mask.shape[0]
-    assert cb.shape[1] == 3
+    axes = (*range(len(cb.shape)-2), -2, -1)
     # compute pairwise squared distance matrix
-    r = numpy.sum(cb*cb, axis=-1).reshape(-1, 1)
+    r = numpy.sum(cb*cb, axis=-1).reshape(*cb.shape[:-1], 1)
     r[0] = r[-1] = numpy.nan
     D = r - 2*cb@cb.T + r.T
     # avoid selecting residue itself as the best
@@ -56,40 +50,38 @@ def find_residue_partners(cb, mask):
 
 
 def calc_conformation_descriptors(ca, mask, partner_index):
-    """Compute conformation descriptors for each residues.
-    """
     # build arrays of indices to use for vectorized angles
     n = ca.shape[0]
     I = numpy.arange(1, ca.shape[-2] - 1)
     J = partner_index[I]
-    # compute features 
+    # compute conformational descriptors
     u1 = normalize(ca[..., I, :] - ca[..., I-1, :])
     u2 = normalize(ca[..., I+1, :] - ca[..., I, :])
     u3 = normalize(ca[..., J, :] - ca[..., J-1, :])
     u4 = normalize(ca[..., J+1, :] - ca[..., J, :])
     u5 = normalize(ca[..., J, :] - ca[..., I, :])
-    features = numpy.zeros((*ca.shape[:-1], 10))
-    features[I, 0] = numpy.sum(u1 * u2, axis=-1)
-    features[I, 1] = numpy.sum(u3 * u4, axis=-1)
-    features[I, 2] = numpy.sum(u1 * u5, axis=-1)
-    features[I, 3] = numpy.sum(u3 * u5, axis=-1)
-    features[I, 4] = numpy.sum(u1 * u4, axis=-1)
-    features[I, 5] = numpy.sum(u2 * u3, axis=-1)
-    features[I, 6] = numpy.sum(u1 * u3, axis=-1)
-    features[I, 7] = numpy.linalg.norm(ca[I] - ca[J], axis=-1)
-    features[I, 8] = numpy.clip(J - I, -4, 4)
-    features[I, 9] = numpy.copysign(numpy.log(numpy.abs(J - I) + 1), J - I)
+    desc = numpy.zeros((*ca.shape[:-1], 10))
+    desc[I, 0] = numpy.sum(u1 * u2, axis=-1)
+    desc[I, 1] = numpy.sum(u3 * u4, axis=-1)
+    desc[I, 2] = numpy.sum(u1 * u5, axis=-1)
+    desc[I, 3] = numpy.sum(u3 * u5, axis=-1)
+    desc[I, 4] = numpy.sum(u1 * u4, axis=-1)
+    desc[I, 5] = numpy.sum(u2 * u3, axis=-1)
+    desc[I, 6] = numpy.sum(u1 * u3, axis=-1)
+    desc[I, 7] = numpy.linalg.norm(ca[I] - ca[J], axis=-1)
+    desc[I, 8] = numpy.clip(J - I, -4, 4)
+    desc[I, 9] = numpy.copysign(numpy.log(numpy.abs(J - I) + 1), J - I)
     # update mask around invalid positions
     mask[1:-1] &= mask[I-1] & mask[I] & mask[I+1] & mask[J-1] & mask[J] & mask[J+1]
     mask[0] = mask[n-1] = False
-    return features
+    return desc
 
 
 class FeatureEncoder:
 
     @classmethod
     def load(cls):
-        with importlib.resources.files(__package__).joinpath("encoder_weights_3di.kerasify").open("rb") as f:
+        with open("foldseek/data/encoder_weights_3di.kerasify", "rb") as f:
             parser = KerasifyParser(f)
             layers = list(parser)
         return cls(layers)
@@ -164,7 +156,60 @@ class CentroidEncoder:
         return states
 
 
+class Encoder:
 
+    def __init__(self, *, alpha=270, beta=0, d=2):
+        self.vc_calculator = VirtualCenterCalculator(alpha=alpha, beta=beta, d=d)
+        self.feature_encoder = FeatureEncoder.load()
+        self.centroid_encoder = CentroidEncoder()
+
+    def encode_chain(self, chain, ca_residue=True):
+        # extract residues
+        if ca_residue:
+            residues = [ residue for residue in chain.get_residues() if "CA" in residue ]
+        else:
+            residues = chain.get_residues()
+        # extract atom coordinates
+        ca = numpy.array(numpy.nan).repeat(3*len(residues)).reshape(len(residues), 3)
+        cb = ca.copy()
+        n = ca.copy()
+        c = ca.copy()
+        for i, residue in enumerate(residues):
+            ca[i, :] = residue["CA"].coord
+            n[i, :] = residue["N"].coord
+            c[i, :] = residue["C"].coord
+            if "CB" in residue:
+                cb[i, :] = residue["CB"].coord
+        # encoder coordiantes
+        return self.encode_atoms(ca, cb, n, c)
+
+    def encode_atoms(self, ca, cb, n, c):
+        ca = numpy.asarray(ca)
+        cb = numpy.asarray(cb)
+        n = numpy.asarray(n)
+        c = numpy.asarray(c)
+
+        assert ca.shape == cb.shape
+        assert ca.shape == c.shape
+        assert ca.shape == n.shape
+
+        # fix CB positions if needed
+        nan_indices = numpy.isnan(cb)
+        if numpy.any(nan_indices):
+            cb_approx = approximate_cb_position(ca, n, c)
+            cb[nan_indices] = cb_approx[nan_indices]
+        
+        # compute virtual center
+        vc = self.vc_calculator(ca, cb, n)
+        # mask residues without coordinates
+        mask = create_residue_mask(ca, n, c)
+        # find closest neighbor for each residue
+        partner_index = find_residue_partners(vc, mask)
+        # build position features from residue angles
+        descriptors = calc_conformation_descriptors(ca, mask, partner_index)
+        # compute embeddings and decode states
+        embeddings =  self.feature_encoder(descriptors)
+        return self.centroid_encoder(embeddings, mask)
 
 
 
