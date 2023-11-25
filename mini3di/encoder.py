@@ -9,8 +9,9 @@ import typing
 import numpy
 import numpy.ma
 
+from . import _unkerasify
+from .layers import Layer, CentroidLayer, Model
 from .utils import normalize
-from ._unkerasify import KerasifyParser, Layer, Model
 
 try:
     from importlib.resources import files as resource_files
@@ -24,60 +25,6 @@ if typing.TYPE_CHECKING:
 
 DISTANCE_ALPHA_BETA = 1.5336
 ALPHABET = numpy.array(list("ACDEFGHIKLMNPQRSTVWYX"))
-
-class CentroidEncoder:
-    _CENTROIDS: ArrayNx2[numpy.float32] = numpy.array(
-        [
-            [-1.0729, -0.3600],
-            [-0.1356, -1.8914],
-            [0.4948, -0.4205],
-            [-0.9874, 0.8128],
-            [-1.6621, -0.4259],
-            [2.1394, 0.0486],
-            [1.5558, -0.1503],
-            [2.9179, 1.1437],
-            [-2.8814, 0.9956],
-            [-1.1400, -2.0068],
-            [3.2025, 1.7356],
-            [1.7769, -1.3037],
-            [0.6901, -1.2554],
-            [-1.1061, -1.3397],
-            [2.1495, -0.8030],
-            [2.3060, -1.4988],
-            [2.5522, 0.6046],
-            [0.7786, -2.1660],
-            [-2.3030, 0.3813],
-            [1.0290, 0.8772],
-        ]
-    )
-
-    @classmethod
-    def load(cls, invalid_state: int = 2):
-        return cls(cls._CENTROIDS.copy(), invalid_state=invalid_state)
-
-    def __init__(
-        self, 
-        centroids: ArrayNx2[numpy.float32], 
-        invalid_state: int = 2
-    ) -> None:
-        self.invalid_state = invalid_state
-        self.centroids = numpy.asarray(centroids)
-        self.r2 = numpy.sum(self.centroids**2, 1).reshape(-1, 1).T
-
-    def __call__(
-        self, 
-        embeddings: ArrayNx2[numpy.floating], 
-        mask: ArrayN[numpy.bool_]
-    ) -> ArrayN[numpy.uint8]:
-        # compute pairwise squared distance matrix
-        r1 = numpy.sum(embeddings * embeddings, 1).reshape(-1, 1)
-        D = r1 - 2 * embeddings @ self.centroids.T + self.r2
-        # find closest centroid
-        states = numpy.empty(D.shape[0], dtype=numpy.uint8)
-        D.argmin(axis=1, out=states)
-        # use invalid state for masked residues
-        states[~mask] = self.invalid_state
-        return states
 
 
 class _BaseEncoder(abc.ABC, typing.Generic[T]):
@@ -299,11 +246,39 @@ class FeatureEncoder(_BaseEncoder["ArrayN[numpy.float32]"]):
 
 
 class Encoder(_BaseEncoder["ArrayN[numpy.uint8]"]):
+
+    _INVALID_STATE = 2
+    _CENTROIDS: ArrayNx2[numpy.float32] = numpy.array(
+        [
+            [-1.0729, -0.3600],
+            [-0.1356, -1.8914],
+            [0.4948, -0.4205],
+            [-0.9874, 0.8128],
+            [-1.6621, -0.4259],
+            [2.1394, 0.0486],
+            [1.5558, -0.1503],
+            [2.9179, 1.1437],
+            [-2.8814, 0.9956],
+            [-1.1400, -2.0068],
+            [3.2025, 1.7356],
+            [1.7769, -1.3037],
+            [0.6901, -1.2554],
+            [-1.1061, -1.3397],
+            [2.1495, -0.8030],
+            [2.3060, -1.4988],
+            [2.5522, 0.6046],
+            [0.7786, -2.1660],
+            [-2.3030, 0.3813],
+            [1.0290, 0.8772],
+        ]
+    )
+
     def __init__(self) -> None:
         self.feature_encoder = FeatureEncoder()
         with resource_files(__package__).joinpath("encoder_weights_3di.kerasify").open("rb") as f:
-            self.vae_encoder = Model.load(f)
-        self.centroid_encoder = CentroidEncoder.load()
+            layers = _unkerasify.load(f)
+            layers.append(CentroidLayer(self._CENTROIDS))
+        self.vae_encoder = Model(layers)
 
     def encode_atoms(
         self, 
@@ -313,12 +288,12 @@ class Encoder(_BaseEncoder["ArrayN[numpy.uint8]"]):
         c: ArrayNx3[numpy.floating],
     ) -> ArrayN[numpy.uint8]:
         descriptors = self.feature_encoder.encode_atoms(ca, cb, n, c)
-        embeddings = self.vae_encoder(descriptors.data)
-        states = self.centroid_encoder(embeddings, ~descriptors.mask[:, 0])
+        states = self.vae_encoder(descriptors.data)
+        states[descriptors.mask[:, 0]] = self._INVALID_STATE
         return numpy.ma.masked_array(
             states, 
-            mask=~descriptors.mask[:, 0], 
-            fill_value=self.centroid_encoder.invalid_state
+            mask=descriptors.mask[:, 0], 
+            fill_value=self._INVALID_STATE,
         )
 
     def build_sequence(self, states: ArrayN[numpy.uint8]) -> str:

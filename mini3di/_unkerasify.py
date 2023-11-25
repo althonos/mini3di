@@ -1,19 +1,14 @@
 from __future__ import annotations
 
-import abc
 import enum
-import functools
 import itertools
 import struct
 import typing
-from typing import BinaryIO, Iterable
+from typing import BinaryIO, Iterable, List
 
 import numpy
 
-from .utils import relu
-
-if typing.TYPE_CHECKING:
-    from .utils import ArrayNxM
+from .layers import Layer, DenseLayer
 
 
 class LayerType(enum.IntEnum):
@@ -34,46 +29,6 @@ class ActivationType(enum.IntEnum):
     SIGMOID = 4
     TANH = 5
     HARD_SIGMOID = 6
-
-
-class Layer(abc.ABC):
-    @abc.abstractmethod
-    def __call__(self, X: ArrayNxM[numpy.floating]) -> ArrayNxM[numpy.floating]:
-        raise NotImplementedError
-
-
-class DenseLayer(Layer):
-    def __init__(self, weights, biases=None, activation=ActivationType.RELU):
-        self.activation = activation
-        self.weights = numpy.asarray(weights)
-        if biases is None:
-            self.biases = numpy.zeros(self.weights.shape[1])
-        else:
-            self.biases = numpy.asarray(biases)
-
-    def __call__(self, X: ArrayNxM[numpy.floating]) -> ArrayNxM[numpy.floating]:
-        _X = numpy.asarray(X)
-        out = _X @ self.weights
-        out += self.biases
-
-        if self.activation == ActivationType.RELU:
-            return relu(out, out=out)
-        else:
-            return out
-
-
-class Model:
-
-    @classmethod
-    def load(cls, f: BinaryIO) -> Model:
-        parser = KerasifyParser(f)
-        return cls(parser)
-
-    def __init__(self, layers: Iterable[Layer] = ()):
-        self.layers = list(layers)
-    
-    def __call__(self, X: ArrayNxM[numpy.floating]) -> ArrayNxM[numpy.floating]:
-        return functools.reduce(lambda x, f: f(x), self.layers, X)
 
 
 class KerasifyParser:
@@ -130,6 +85,12 @@ class KerasifyParser:
             )
             biases = numpy.frombuffer(self._read(f"={b0}f"), dtype="f4").copy()
             activation = ActivationType(self._get("I")[0])
-            return DenseLayer(weights, biases, activation)
+            if activation not in (ActivationType.LINEAR, ActivationType.RELU):
+                raise NotImplementedError(f"Unsupported activation type: {activation!r}")
+            return DenseLayer(weights, biases, activation==ActivationType.RELU)
         else:
             raise NotImplementedError(f"Unsupported layer type: {layer_type!r}")
+
+
+def load(fh: BinaryIO) -> List[Layer]:
+    return list(KerasifyParser(fh))
