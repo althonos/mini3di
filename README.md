@@ -9,6 +9,7 @@
 [![Bioconda](https://img.shields.io/conda/vn/bioconda/mini3di?style=flat-square&maxAge=3600&logo=anaconda)](https://anaconda.org/bioconda/mini3di)
 [![Wheel](https://img.shields.io/pypi/wheel/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di/#files)
 [![Python Versions](https://img.shields.io/pypi/pyversions/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di/#files)
+[![Python Implementations](https://img.shields.io/badge/impl-universal-success.svg?style=flat-square&maxAge=3600&label=impl)](https://pypi.org/project/mini3di/#files)
 [![Source](https://img.shields.io/badge/source-GitHub-303030.svg?maxAge=2678400&style=flat-square)](https://github.com/althonos/mini3di/)
 [![Mirror](https://img.shields.io/badge/mirror-EMBL-009f4d?style=flat-square&maxAge=2678400)](https://git.embl.de/larralde/mini3di/)
 [![GitHub issues](https://img.shields.io/github/issues/althonos/mini3di.svg?style=flat-square&maxAge=600)](https://github.com/althonos/mini3di/issues)
