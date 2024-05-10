@@ -27,7 +27,10 @@ jobs:
           python-release: v3.10
           python-impl: CPython
         - python-version: "3.11"
-          python-release: v3.10
+          python-release: v3.11
+          python-impl: CPython
+        - python-version: "3.12"
+          python-release: v3.12
           python-impl: CPython
         - python-version: pypy-3.7
           python-release: v3.7
@@ -37,6 +40,9 @@ jobs:
           python-impl: PyPy
         - python-version: pypy-3.9
           python-release: v3.9
+          python-impl: PyPy
+        - python-version: pypy-3.10
+          python-release: v3.10
           python-impl: PyPy
     steps:
     - name: Checkout code
@@ -113,6 +119,8 @@ jobs:
     environment: PyPI
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      id-token: write
     name: Upload
     needs:
     - sdist
@@ -124,11 +132,7 @@ jobs:
           name: dist
           path: dist
     - name: Publish distributions to PyPI
-      uses: pypa/gh-action-pypi-publish@master
-      with:
-        user: __token__
-        password: ${{ secrets.PYPI_API_TOKEN }}
-        skip_existing: false
+      uses: pypa/gh-action-pypi-publish@release/v1
 
   release:
     environment: GitHub Releases
