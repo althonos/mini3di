@@ -4,7 +4,7 @@
 __all__ = ["Encoder", "FeatureEncoder", "PartnerIndexEncoder", "VirtualCenterEncoder"]
 __version__ = "0.1.0"
 __author__ = "Martin Larralde <martin.larralde@embl.de>"
-__license__ = "GPLv3"
+__license__ = "GPL-3.0-only"
 __credits__ = "Martin Steinegger and his lab for ``foldseek``."
 
 from .encoder import Encoder, FeatureEncoder, PartnerIndexEncoder, VirtualCenterEncoder
