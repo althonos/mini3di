@@ -1,3 +1,8 @@
+"""Parser for extracting weights from Keras files.
+
+Adapted from `moof2k/kerasify <https://github.com/moof2k/kerasify>`_.
+
+"""
 from __future__ import annotations
 
 import enum

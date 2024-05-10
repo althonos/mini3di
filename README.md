@@ -5,7 +5,7 @@
 [![Actions](https://img.shields.io/github/actions/workflow/status/althonos/mini3di/test.yml?branch=main&logo=github&style=flat-square&maxAge=300)](https://github.com/althonos/mini3di/actions)
 [![Coverage](https://img.shields.io/codecov/c/gh/althonos/mini3di?style=flat-square&maxAge=3600)](https://codecov.io/gh/althonos/mini3di/)
 [![License](https://img.shields.io/badge/license-GPLv3-blue.svg?style=flat-square&maxAge=2678400)](https://choosealicense.com/licenses/gpl-3.0/)
-<!-- [![PyPI](https://img.shields.io/pypi/v/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di)
+[![PyPI](https://img.shields.io/pypi/v/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di)
 [![Bioconda](https://img.shields.io/conda/vn/bioconda/mini3di?style=flat-square&maxAge=3600&logo=anaconda)](https://anaconda.org/bioconda/mini3di)
 [![Wheel](https://img.shields.io/pypi/wheel/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di/#files)
 [![Python Versions](https://img.shields.io/pypi/pyversions/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di/#files)
@@ -15,7 +15,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/althonos/mini3di.svg?style=flat-square&maxAge=600)](https://github.com/althonos/mini3di/issues)
 [![Docs](https://img.shields.io/readthedocs/mini3di/latest?style=flat-square&maxAge=600)](https://mini3di.readthedocs.io)
 [![Changelog](https://img.shields.io/badge/keep%20a-changelog-8A0707.svg?maxAge=2678400&style=flat-square)](https://github.com/althonos/mini3di/blob/master/CHANGELOG.md)
-[![Downloads](https://img.shields.io/badge/dynamic/json?style=flat-square&color=303f9f&maxAge=86400&label=downloads&query=%24.total_downloads&url=https%3A%2F%2Fapi.pepy.tech%2Fapi%2Fprojects%2Fmini3di)](https://pepy.tech/project/mini3di) -->
+[![Downloads](https://img.shields.io/pypi/dm/mini3di?style=flat-square&color=303f9f&maxAge=86400&label=downloads)](https://pepy.tech/project/mini3di)
 
 ## 🗺️ Overview
 
@@ -36,16 +36,11 @@ versions (3.7+).
 
 ## 🔧 Installing
 
-For now, the package can be installed from the GitHub repository with `pip`:
-```console
-$ pip install git+https://github.com/althonos/mini3di
-```
-
-<!-- Install the `mini3di` package directly from [PyPi](https://pypi.org/project/mini3di)
+Install the `mini3di` package directly from [PyPi](https://pypi.org/project/mini3di)
 which hosts universal wheels that can be installed with `pip`:
 ```console
 $ pip install mini3di
-``` -->
+```
 
 <!-- Otherwise, `mini3di` is also available as a [Bioconda](https://bioconda.github.io/)
 package:
@@ -120,11 +115,11 @@ or ask something. If you are filing in on a bug, please include as much
 information as you can about the issue, and try to recreate the same bug
 in a simple, easily reproducible situation.
 
-<!-- ### 🏗️ Contributing
+### 🏗️ Contributing
 
 Contributions are more than welcome! See
 [`CONTRIBUTING.md`](https://github.com/althonos/mini3di/blob/main/CONTRIBUTING.md)
-for more details. -->
+for more details.
 
 ## 📋 Changelog
 
