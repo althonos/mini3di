@@ -11,7 +11,7 @@ import numpy.ma
 
 from . import _unkerasify
 from .layers import Layer, CentroidLayer, Model
-from .utils import normalize
+from .utils import normalize, last
 
 try:
     from importlib.resources import files as resource_files
@@ -22,6 +22,12 @@ T = typing.TypeVar("T")
 if typing.TYPE_CHECKING:
     from Bio.PDB import Chain
     from .utils import ArrayN, ArrayNx2, ArrayNx3, ArrayNx10, ArrayNxM
+
+    try:
+        from typing import Literal
+    except ImportError:
+        from typing_extensions import Literal
+
 
 DISTANCE_ALPHA_BETA = 1.5336
 ALPHABET = numpy.array(list("ACDEFGHIKLMNPQRSTVWYX"))
@@ -55,6 +61,7 @@ class _BaseEncoder(abc.ABC, typing.Generic[T]):
         self,
         chain: Chain,
         ca_residue: bool = True,
+        disordered_atom: Literal["best", "last"] = "best",
     ) -> T:
         """Encode the given chain to a different representation.
 
@@ -65,6 +72,11 @@ class _BaseEncoder(abc.ABC, typing.Generic[T]):
                 residues which have a *CA* atom. Set to `False` to use every
                 residue returned by the `~Bio.PDB.Chain.Chain.get_residues`
                 method.
+            disordered_atom (`str`): How to handle disordered atoms in the
+                source chain. The default (`"best"`) will retain the atom
+                with the best occupancy. Setting this to `"last"` will
+                use the last atom instead, in order to produce the same
+                results as Foldseek.
 
         """
         # extract residues
@@ -79,15 +91,18 @@ class _BaseEncoder(abc.ABC, typing.Generic[T]):
         n = ca.copy()
         c = ca.copy()
         for i, residue in enumerate(residues):
-            if "CA" in residue:
-                ca[i, :] = residue["CA"].coord
-            if "N" in residue:
-                n[i, :] = residue["N"].coord
-            if "C" in residue:
-                c[i, :] = residue["C"].coord
-            if "CB" in residue:
-                cb[i, :] = residue["CB"].coord
-        # encoder coordiantes
+            for atom in residue.get_atoms():
+                if atom.is_disordered() and disordered_atom == "last":
+                    atom = last(atom)
+                if atom.get_name() == "CA":
+                    ca[i, :] = atom.coord
+                elif atom.get_name() == "N":
+                    n[i, :] = atom.coord
+                elif atom.get_name() == "C":
+                    c[i, :] = atom.coord
+                elif atom.get_name() == "CB" or atom.get_name() == "CB A":
+                    cb[i, :] = atom.coord
+        # encode coordinates
         return self.encode_atoms(ca, cb, n, c)
 
 

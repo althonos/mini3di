@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import typing
+from collections import deque
 
 import numpy
 
@@ -42,3 +43,11 @@ def relu(
         dtype=dtype,
         subok=subok,
     )
+
+
+def last(it):
+    """Get the last element of an iterator.
+    """
+    it = iter(it)
+    dd = deque(it, maxlen=1)
+    return dd.pop()
