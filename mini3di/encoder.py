@@ -78,6 +78,9 @@ class _BaseEncoder(abc.ABC, typing.Generic[T]):
                 use the last atom instead, in order to produce the same
                 results as Foldseek.
 
+        .. versionadded:: 0.2.0
+           The ``disordered_atom`` argument.
+
         """
         # extract residues
         if ca_residue:

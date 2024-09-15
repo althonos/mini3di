@@ -129,11 +129,10 @@ in the [Keep a Changelog](http://keepachangelog.com/en/1.0.0/) format.
 
 ## ⚖️ License
 
-This library is provided under the
-[GNU General Public License v3.0](https://choosealicense.com/licenses/gpl-3.0/).
+This library is provided under the [BSD 3-clause license](https://choosealicense.com/licenses/bsd-3-clause/).
 It includes some code ported from `foldseek`, which is licensed under the
-[GNU General Public License v3.0](https://choosealicense.com/licenses/gpl-3.0/)
-as well.
+[GNU General Public License v3.0](https://choosealicense.com/licenses/gpl-3.0/),
+and relicensed with the permission of the authors.
 
 *This project is in no way not affiliated, sponsored, or otherwise endorsed
 by the [original `foldseek` authors](https://github.com/steineggerlab).

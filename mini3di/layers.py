@@ -52,7 +52,7 @@ class CentroidLayer(Layer):
         self.r2 = numpy.sum(self.centroids**2, axis=1).reshape(-1, 1).T
     def __call__(self, X: ArrayNxM[numpy.floating]) -> ArrayN[numpy.uint8]:
         # compute pairwise squared distance matrix
-        r1 = numpy.sum(X * X, axis=1).reshape(-1, 1)
+        r1 = numpy.sum(X**2, axis=1).reshape(-1, 1)
         D = r1 - 2 * X @ self.centroids.T + self.r2
         # find closest centroid
         states = numpy.empty(D.shape[0], dtype=numpy.uint8)
