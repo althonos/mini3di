@@ -6,7 +6,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 
 ## [Unreleased]
-[Unreleased]: https://github.com/althonos/mini3di/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/althonos/mini3di/compare/v0.2.1...HEAD
+
+
+## [v0.2.1] - 2024-09-15
+[v0.2.1]: https://github.com/althonos/mini3di/compare/v0.2.0...v0.2.1
+
+### Fixed
+- Typo in atom mask creation ([#3](https://github.com/althonos/mini3di/pull/3)).
 
 
 ## [v0.2.0] - 2024-09-13
