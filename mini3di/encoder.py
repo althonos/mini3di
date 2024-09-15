@@ -233,7 +233,7 @@ class VirtualCenterEncoder(_BaseEncoder["ArrayNx3[numpy.float32]"]):
         """
         mask_ca = numpy.isnan(ca).max(axis=1)
         mask_n = numpy.isnan(n).max(axis=1)
-        mask_c = numpy.isnan(n).max(axis=1)
+        mask_c = numpy.isnan(c).max(axis=1)
         return (mask_ca | mask_n | mask_c).repeat(3).reshape(-1, 3)
 
     def encode_atoms(
