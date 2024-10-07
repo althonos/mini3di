@@ -4,7 +4,7 @@
 
 [![Actions](https://img.shields.io/github/actions/workflow/status/althonos/mini3di/test.yml?branch=main&logo=github&style=flat-square&maxAge=300)](https://github.com/althonos/mini3di/actions)
 [![Coverage](https://img.shields.io/codecov/c/gh/althonos/mini3di?style=flat-square&maxAge=3600)](https://codecov.io/gh/althonos/mini3di/)
-[![License](https://img.shields.io/badge/license-GPLv3-blue.svg?style=flat-square&maxAge=2678400)](https://choosealicense.com/licenses/gpl-3.0/)
+[![License](https://img.shields.io/badge/license-BSD--3--Clause-blue.svg?style=flat-square&maxAge=2678400)](https://choosealicense.com/licenses/bsd-3-clause/)
 [![PyPI](https://img.shields.io/pypi/v/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di)
 [![Bioconda](https://img.shields.io/conda/vn/bioconda/mini3di?style=flat-square&maxAge=3600&logo=anaconda)](https://anaconda.org/bioconda/mini3di)
 [![Wheel](https://img.shields.io/pypi/wheel/mini3di.svg?style=flat-square&maxAge=3600)](https://pypi.org/project/mini3di/#files)
