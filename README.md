@@ -85,7 +85,7 @@ print(sequence)
 ```
 
 The encoder can work directly with Biopython objects, if Biopython is available.
-A helper method `encode_chain` to extract the atom coordinates from
+A helper method `encode_chain` is provided to extract the atom coordinates from
 a [`Bio.PDB.Chain`](https://biopython.org/docs/latest/api/Bio.PDB.Chain.html)
 and encoding them directly. For instance, to encode all the chains from a
 [PDB file](https://en.wikipedia.org/wiki/Protein_Data_Bank_(file_format)):
