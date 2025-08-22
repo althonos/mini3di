@@ -15,7 +15,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/althonos/mini3di.svg?style=flat-square&maxAge=600)](https://github.com/althonos/mini3di/issues)
 [![Docs](https://img.shields.io/readthedocs/mini3di/latest?style=flat-square&maxAge=600)](https://mini3di.readthedocs.io)
 [![Changelog](https://img.shields.io/badge/keep%20a-changelog-8A0707.svg?maxAge=2678400&style=flat-square)](https://github.com/althonos/mini3di/blob/master/CHANGELOG.md)
-[![Downloads](https://img.shields.io/pypi/dm/mini3di?style=flat-square&color=303f9f&maxAge=86400&label=downloads)](https://pepy.tech/project/mini3di)
+[![Downloads](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fpepy.tech%2Fprojects%2Fmini3di&search=%5B0-9%5D%2B.%5B0-9%5D%2B(k%7CM)&style=flat-square&label=downloads&color=303f9f&cacheSeconds=86400)](https://pepy.tech/project/mini3di)
 
 ## 🗺️ Overview
 
